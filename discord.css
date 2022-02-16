@@ -115,6 +115,10 @@ body {
   box-shadow: none !important;
 }
 
+.clear-button svg {
+  margin-top: 6px;
+}
+
 .markdown-section code {
   white-space: revert !important;
 }
