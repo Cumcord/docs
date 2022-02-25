@@ -66,6 +66,8 @@ Please note that you must enable developer mode with `cumcord.dev.toggleDevMode(
 
 If you want to access your plugin's settings modal while developing, you can use `cumcord.dev.showSettings()`.
 
+You can access your plugin's persist nest from `cumcord.dev.storage`.
+
 `sperm dev` does not automatically rebuild your plugin on disk, so you'll need to run `sperm build` again once you're done testing.
 
 ## Distributing a Plugin
@@ -125,6 +127,22 @@ export default (data) => {
 }
 ```
 
+These are always equal to the same apis on the cumcord global
+```js
+import { findByProps } from "@cumcord/modules/webpack";
+findByProps === cumcord.modules.webpack.findByProps;
+import patcher from "@cumcord/patcher"
+patcher === cumcord.patcher;
+```
+
+You can also import the nest from your plugin specific data:
+```js
+import { persist } from "@cumcord/pluginData";
+```
+
+Imports like this are heavily preferred over accessing the cumcord global,
+but we will use cumcord.* in these docs for the sake of conciseness.
+
 ### Static file imports <!-- {docsify-ignore} -->
 Cumcord plugins can import files statically for use by appending `:static` to a file's path.
 
@@ -158,6 +176,8 @@ injectedCSS = cumcord.patcher.injectCSS(`
   }
 `);
 
+// modify styles to something different
+// replaces old styles
 injectedCSS(`
   .vizality > * {
     color: red;
@@ -264,12 +284,34 @@ patched();
 exampleFunction();
 ```
 
-All of these functions are powerful and will likely be used frequently in your plugins.
+### cumcord.patcher.findAndPatch <!-- {docsify-ignore} -->
+`cumcord.patcher.findAndPatch` solves the problem of lazy-loaded components.
+
+This provides an easy method to patch a component as soon as it is available:
+```js
+// traditional way
+const MessageContextMenu = cumcord.webpack.findByDisplayName("MessageContextMenu", false)
+const unpatch = cumcord.patcher.after("default", MessageContextMenu, () => {});
+// ERROR!!!! - MessageContextMenu may be `undefined`
+
+// new way
+const unpatch = cumcord.patcher.findAndPatch(
+  () => cumcord.webpack.findByDisplayName("MessageContextMenu", false),
+  (MessageContextMenu) => cumcord.patcher.after("default", MessageContextMenu, () => {});
+); // works!
+```
+
+
+All of these patcher functions are powerful and will likely be used frequently in your plugins.
 
 ## UI Elements
 Cumcord provides multiple APIs for managing UI elements, but under the hood they all use React.
 
 Cumcord plugins can use .jsx files to create React components.
+
+JSX files get the `React` object in them automatically for free,
+and sperm will replace imports from `"react"` to make npm packages work,
+but it is preferred to explicitly import from cumcord if you need react apis, as follows:
 
 ```js
 import { React } from "@cumcord/modules/common";
@@ -287,7 +329,11 @@ The function takes an object with the following properties:
 
 ```js
 // The duration is in milliseconds to allow fine control of your toasts.
-cumcord.ui.toasts.showToast({title: "Hello!", content: "Hello there!", duration: 3000});
+cumcord.ui.toasts.showToast({
+  title: "Hello!",
+  content: "Hello there!",
+  duration: 3000
+});
 ```
 
 ### cumcord.ui.modals.showConfirmationModal <!-- {docsify-ignore} -->
@@ -301,7 +347,12 @@ This function takes an object and a callback function. The object contains the f
 - `type`: The type for the confirm button. Can be `danger`, `confirm`, or `neutral`.
 
 ```js
-let confirmed = await cumcord.ui.modals.showConfirmationModal({header: "Are you sure?", content: "This will delete your account.", confirmText: "Delete", type: "danger"});
+let confirmed = await cumcord.ui.modals.showConfirmationModal({
+  header: "Are you sure?",
+  content: "This will delete your account.",
+  confirmText: "Delete",
+  type: "danger"
+});
 ```
 
 ## Commands
@@ -347,19 +398,73 @@ export default () => {
   return {
     onLoad(),
     onUnload(),
-    settings: <YourComponent />
+    settings: YourComponent
   }
 }
 ```
 
-Internally, Cumcord uses React.createElement for this, so you can also pass an array of components to be rendered too.
+The settings prop can be one of the following:
+ - A react component (`settings: YourComponent`)
+ - A react element (`settings: <YourComponent />`)
+ - An array of react **ELEMENTS** (`settings: [<YourComponent />, <YourOtherComponent />]`)
 
+A component is the preferred way to use settings.
 
 ## Finding internal Discord functions
 Usually, finding internal Discord functions is fairly difficult, given that Discord's internal modules are not documented.
 
-Cumcord currently provides a useful API for finding Discord internal functions, `cumcord.modules.webpack.findByKeywordAll`.
+Cumcord currently provides many useful APIs for finding Discord internal functions, under `cumcord.modules.webpack`.
 
-`findByKeywordAll` takes a string and searches all of Discord's internal modules for modules with functions with that string in their props, then returns an array containing them.
+### Webpack searching: findByProps  <!-- {docsify-ignore} -->
+`cumcord.modules.webpack.findByProps` finds a module based on the props exported on it.
 
-**DO NOT USE THIS FUNCTION FOR ANYTHING OTHER THAN FINDING MODULES FOR USE WITH `findByProps`, IT IS SLOW AND IS MEANT FOR DISCOVERING MODULES.**
+For example, to find the component with the `getGuild` function:
+```js
+const { getGuild } = cumcord.modules.webpack.findByProps("getGuild")
+getGuild("824921608560181258") // the Cumcord guild!
+```
+
+You can also pass multiple props that must exist: `findByProps("getGuilds", "getGuildCount")`.
+
+You can get all modules that match instead of the first one with `findByPropsAll`.
+
+### Webpack searching: findByDisplayName  <!-- {docsify-ignore} -->
+`cumcord.modules.webpack.findByDisplayName` finds a module based on the display name of its default export.
+
+This is most useful for finding react components:
+```js
+const FormText = cumcord.modules.webpack.findByDisplayName("FormText");
+<FormText />
+```
+
+You can also pass `false` as the second argument to get the parent for patching with
+```js
+const FormText = cumcord.modules.webpack.findByDisplayName("FormText", false);
+const unpatch = cumcord.patcher.after("default", FormText, () => {});
+```
+
+You can find all modules with that display name instead of only the first with `findByDisplayNameAll`,
+though that does not support finding the parent of the module for patching.
+
+### Webpack searching: findByKeywordAll  <!-- {docsify-ignore} -->
+`cumcord.modules.webpack.findByKeywordAll` can be helpful in finding modules that you don't know the exact props of.
+
+It searches for any props in the module that case insensitively match a set of keywords.
+For example, for all modules mentioning the user, you can:
+```js
+const matches = cumcord.modules.webpack.findByKeywordAll("user");
+matches.length === 219 // as of the time of writing :)
+```
+
+**findByKeywordAll is not efficient, do NOT use this in a finished plugin, its for development use**
+
+### Webpack searching: findByStrings  <!-- {docsify-ignore} -->
+`cumcord.modules.webpack.findByStrings` finds a module based on strings it may contain.
+This function is VERY inefficient but almost guaranteed to find a match of your string.
+
+It should never be needed except for development, and where it may be needed (notable example: zustand),
+you should instead write a much more performant custom find filter
+
+Custom find filters will be explained more in the [webpack](/webpack/) page.
+
+**THIS IS ACTUALLY REALLY SLOW, NEVER EVER EVER USE THIS IN A PLUGIN**
