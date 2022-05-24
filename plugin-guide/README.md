@@ -80,34 +80,6 @@ Static hosting platforms I recommend:
 
 If you'd like to get your plugin on the [Cumdump](https://dump.cumcord.com) you can join the Cumcord Discord and ask a Cumdump manager to put it there.
 
-## Cumcord Websocket API
-Cumcord has a built in websocket API that allows you to trigger plugin installation from the web.
-
-Cumcord's websocket API **only works on Discord desktop** and hooks into Discord's RPC websocket. As such, Cumcord's websocket runs on the same port as Discord's websocket. Discord's RPC websocket port range is 6463 - 6472, however if this changes in the future and these docs aren't updated you can see their current port range [here](https://discord.com/developers/docs/topics/rpc#rpc-server-ports).
-
-Accessing the websocket API is as simple as connecting to `ws://127.0.0.1:[PORT]/cumcord`. If you forget the `/cumcord`, you will end up connecting to Discord's RPC websocket.
-
-### Using the websocket API <!-- {docsify-ignore} -->
-The websocket API is a simple JSON-based protocol.
-You must send a JSON object with the following properties:
-- `action`: The action to perform.
-- `uuid`: A unique ID for the request to allow you to match the response to the request.
-
-Cumcord will respond with a JSON object with the following properties:
-- `uuid`: The same ID as the request.
-- `status`: The status of the request, either `OK` or `ERROR`.
-- `message`: A message describing the error if `status` is `ERROR`.
-
-### install_plugin <!-- {docsify-ignore} -->
-`install_plugin` will prompt Cumcord to install a plugin.
-`install_plugin` takes the following properties:
-- `url`: The URL of the plugin to install.
-
-### update_plugin_dev <!-- {docsify-ignore} -->
-`update_plugin_dev` will prompt Cumcord to load a dev plugin from http://127.0.0.1:42069.
-
-`update_plugin_dev` will not work until development mode is toggled via `cumcord.dev.toggleDevMode()`.
-
 ## Importing Cumcord APIs
 Cumcord plugins can import Cumcord APIs through the `import` keyword with the alias `@cumcord`.
 
@@ -115,33 +87,38 @@ For example, the following plugin imports Cumcord's logger and prints a message 
 ```js
 import { log } from '@cumcord/utils/logger';
 
-export default (data) => {
-  return {
-    onLoad() {
-      log("I've been loaded!");
-    },
-    onUnload() {
-      log("I've been unloaded!");
-    }
+export default {
+  onLoad() {
+    log("I've been loaded!");
+  },
+  onUnload() {
+    log("I've been unloaded!");
   }
-}
+};
 ```
 
 These are always equal to the same apis on the cumcord global
 ```js
 import { findByProps } from "@cumcord/modules/webpack";
+import patcher from "@cumcord/patcher";
 findByProps === cumcord.modules.webpack.findByProps;
-import patcher from "@cumcord/patcher"
 patcher === cumcord.patcher;
 ```
 
-You can also import the nest from your plugin specific data:
+The only exception to this is plugin-specific APIs:
 ```js
-import { persist } from "@cumcord/pluginData";
+import pluginData from "@cumcord/pluginData";
+cumcord.pluginData === pluginData;
+window.cumcord.pluginData === undefined;
 ```
 
-Imports like this are heavily preferred over accessing the cumcord global,
-but we will use cumcord.* in these docs for the sake of conciseness.
+You can import plugin-specific APIs from `cumcord.pluginData`.
+This includes:
+ - `persist`: a [nest](https://github.com/kyza/nests/tree/v2) to be used for storing data
+ - `id`: The current id of the plugin. Deprecated and kept for back-compat.
+ - `manifest`: Your plugin manifest.
+
+Imports like this are heavily preferred over accessing the cumcord global.
 
 ### Static file imports <!-- {docsify-ignore} -->
 Cumcord plugins can import files statically for use by appending `:static` to a file's path.
@@ -149,16 +126,6 @@ Cumcord plugins can import files statically for use by appending `:static` to a 
 ```js
 import fileContent from "./file.txt:static";
 ```
-
-## Interfacing with Discord
-Cumcord provides an API to get Discord's internal modules.
-- `cumcord.modules.webpack` provides functions for searching through Discord's internal modules.
-- `cumcord.modules.common` provides a list of common Discord modules such as React, ReactDOM, etc.
-- `cumcord.modules.internal` provides Cumcord's npm dependencies such as `idbKeyval` and `nests`.
-
-Typically, you'll use `cumcord.modules.webpack.findByProps` to find basic Discord internal functions such as `getUser()`, and `cumcord.modules.webpack.findByDisplayName` to find React components such as `Markdown`.
-
-Internal functions typically use camelCase (likeThis), and React components typically use PascalCase (LikeThis).
 
 ## Patching
 Cumcord provides an API for patching things at `cumcord.patcher`.
@@ -358,7 +325,6 @@ let confirmed = await cumcord.ui.modals.showConfirmationModal({
 ## Commands
 Sometimes, you'll want to add a command to Discord. Cumcord provides a command API for this.
 
-### cumcord.commands.addCommand <!-- {docsify-ignore} -->
 `cumcord.commands.addCommand` adds a client-side commmand to Discord and returns a function that removes the command.
 
 ```js
@@ -394,26 +360,30 @@ removeCommand() // This removes the command.
 Cumcord plugins can export a React component to be used as a settings panel.
 
 ```jsx
-export default () => {
-  return {
-    onLoad(),
-    onUnload(),
-    settings: YourComponent
-  }
-}
+export default {
+  onLoad(),
+  onUnload(),
+  settings: () => (
+    <div>
+      <Switch />
+      <Input />
+      <Button />
+    </div>
+  ),
+};
 ```
-
-The settings prop can be one of the following:
- - A react component (`settings: YourComponent`)
- - A react element (`settings: <YourComponent />`)
- - An array of react **ELEMENTS** (`settings: [<YourComponent />, <YourOtherComponent />]`)
-
-A component is the preferred way to use settings.
 
 ## Finding internal Discord functions
 Usually, finding internal Discord functions is fairly difficult, given that Discord's internal modules are not documented.
 
-Cumcord currently provides many useful APIs for finding Discord internal functions, under `cumcord.modules.webpack`.
+Cumcord provides an API to help get Discord's internal modules.
+- `cumcord.modules.webpack` provides functions for searching through Discord's internal modules.
+- `cumcord.modules.common` provides a list of common Discord modules such as React, ReactDOM, etc.
+- `cumcord.modules.internal` provides Cumcord's npm dependencies such as `idbKeyval` and `nests`.
+
+Typically, you'll use `cumcord.modules.webpack.findByProps` to find basic Discord internal functions such as `getUser()`, and `cumcord.modules.webpack.findByDisplayName` to find React components such as `Markdown`.
+
+Internal functions typically use camelCase (likeThis), and React components typically use PascalCase (LikeThis).
 
 ### Webpack searching: findByProps  <!-- {docsify-ignore} -->
 `cumcord.modules.webpack.findByProps` finds a module based on the props exported on it.

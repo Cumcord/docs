@@ -7,6 +7,9 @@ as opposed to the traditional request-response model.
 Discord uses a websocket on desktop for rich presence,
 however Cumcord injects into this and allows adding custom actions to the socket.
 
+As of writing the port range is 6463-6472. The lastest ports can be checked
+[here](https://discord.com/developers/docs/topics/rpc#rpc-server-ports).
+
 ## Talking to the websocket
 
 The websocket accepts requests on the `/cumcord` route, e.g. `ws://127.0.0.1:6463/cumcord`,
@@ -46,6 +49,23 @@ It takes two args:
 - `{ raw, ok, error }`: A set of functions to send replies back, see above.
 
 **YOU _MUST_ USE `cumcord.ui.modals.showConfirmationModal` FOR USER CONFIRMATION OF ACTIONS.**
+
+## Built in websocket functions
+### `get_info`
+A simple heartbeat/ping.
+
+When invoked ignores args and always replies with `ok()`.
+
+### `install_plugin`
+Prompts to install a plugin.
+
+Takes:
+ - `url`: the URL to install.
+
+### `update_plugin_dev`
+Causes Cumcord to reload a plugin in dev mode.
+
+It will always fetch from `http://127.0.0.1:42069`, and only works when dev mode is on.
 
 ## An end-to-end example
 
