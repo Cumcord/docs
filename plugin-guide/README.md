@@ -134,10 +134,8 @@ Cumcord provides an API for patching things at `cumcord.patcher`.
 `cumcord.patcher.injectCSS` injects CSS styles to the DOM and returns a function for modifying them. Calling this function with a string will replace the current CSS styles with the new styles, and calling it with `null` will remove the current styles.
 
 ```js
-let injectedCSS;
-
 // Add styles
-injectedCSS = cumcord.patcher.injectCSS(`
+const modifyCSS = cumcord.patcher.injectCSS(`
   .vizality {
     display: none;
   }
@@ -145,7 +143,7 @@ injectedCSS = cumcord.patcher.injectCSS(`
 
 // modify styles to something different
 // replaces old styles
-injectedCSS(`
+modifyCSS(`
   .vizality > * {
     color: red;
     background-color: red;
@@ -153,38 +151,38 @@ injectedCSS(`
 `);
 
 // Remove styles
-injectedCSS();
+modifyCSS();
 ```
 
 Importing a CSS, SASS, or SCSS file will return a function that injects the css in that file.
 ```js
 import cssInject from "./styles.css";
 
-let uninjectCss;
-
 // Inject styles
-uninjectCss = cssInject();
+const uninjectCss = cssInject();
 
 // Remove styles
 uninjectCss();
 ```
 
 ### cumcord.patcher.before <!-- {docsify-ignore} -->
-`cumcord.patcher.before` injects into a function before it is finished running and passes an array with the patched function's arguments to a callback function.
+`cumcord.patcher.before` injects into a function before it runs, and allows modifying the args.
 
 ```js
-let patched;
-
 function exampleFunction(arg1, arg2) { console.log(arg2) };
 
 // Currently, this function will log "there" to the console. Let's patch it so it also logs "hi"!
 exampleFunction("hi", "there");
 
-/*
-  The first argument is the name of the function to patch as a string, the second is the parent object, and the third
-  is a function to be called before the function has finished running.
-*/
-patched = cumcord.patcher.before("exampleFunction", window, (arguments) => { console.log(arguments[0]) });
+const unpatch = cumcord.patcher.before(
+  // name of function to patch
+  "exampleFunction",
+  // object containing patch. `function` decls apply to window.
+  window,
+  // patch function. if returns Array, that becomes the new args to the function.
+  // if returns anything else, the original args are used.
+  (args) => console.log(args[0])
+);
 
 /*
   This function will now log the following:
@@ -194,33 +192,39 @@ patched = cumcord.patcher.before("exampleFunction", window, (arguments) => { con
 exampleFunction("hi", "there");
 
 // This removes the patch.
-patched();
+unpatch();
 
 // This now logs "there" again.
 exampleFunction("hi", "there");
 ```
 
-If you return an array in your callback function, Cumcord will use the array's contents as the arguments to the patched function.
-
 
 ### cumcord.patcher.after <!-- {docsify-ignore} -->
-`cumcord.patcher.after` injects into a function after it is finished running and passes an array with the patched function's arguments to a callback function as well as the function's return value.
+`cumcord.patcher.after` injects into a function after it has returned and allows modifying the return value.
+
+If you are patching an async function, be careful to await the returned promise and use an async patch func.
 
 ```js
-let patched;
 
 function exampleFunction() { return "hi" };
 
 // Currently, this logs "hi" to the console. Let's patch it so it logs "hi there :)" instead.
 console.log(exampleFunction());
 
-patched = cumcord.patcher.after("exampleFunction", window, (arguments, returnValue) => { return `${returnValue} there :)` });
+const unpatch = cumcord.patcher.after(
+  // name of func to patch
+  "exampleFunction",
+  // object containing func
+  window,
+  // patch function. If returns undefined, return value of patched is unmodified, else uses returned value.
+  (args, returnValue) => `${returnValue} there :)`
+);
 
 // This now logs "hi there :)"
 console.log(exampleFunction());
 
 // This removes the patch.
-patched();
+unpatch();
 
 // This now logs "hi" again.
 console.log(exampleFunction());
@@ -333,23 +337,33 @@ const removeCommand = cumcord.commands.addCommand({
   description: "An example command.",
   args: [
     {
-      name: "arg1",
+      name: "myEpicArg",
       description: "An example argument.",
-      type: "string" // This can be string, bool, user, channel, or role. If you don't specify, it defaults to string.
-      required: false // You can specify whether an arg is required or not. If you don't specify, it defaults to true.
+      // This can be string, bool, user, channel, or role. If you don't specify, it defaults to string.
+      type: "string",
+      // You can specify whether an arg is required or not. If you don't specify, it defaults to true.
+      required: false
     }
   ],
-  handler: (ctx, send) => { // This is the function that gets called when the command is run. It can be an async function.
+  // This is the function that gets called when the command is run. It can be async.
+  handler: (ctx, send) => {
     // ctx is an object that contains 3 properties, args, guild, and channel.
-    ctx.args.arg1; // The value of the first argument. If the arg is not provided, it will be undefined.
+    
+    // The value of the first argument. If the arg is not provided, it will be undefined.
+    ctx.args.myEpicArg;
 
-    ctx.guild; // The guild the command was run in. This is a standard Discord guild object, and you can find out more about it by console.logging it.
+    // The guild the command was run in. This is a standard Discord guild object, and you can find out more about it by console.logging it.
+    ctx.guild;
 
-    ctx.channel; // The channel the command was run in. This is a standard Discord channel object, and you can find out more about it by console.logging it.
+    // The channel the command was run in. This is a standard Discord channel object, and you can find out more about it by console.logging it.
+    ctx.channel;
 
-    send("Hello world!") // This sends a client-side message to the channel the command was run in.
+    // This sends a client-side (fake) message to the channel the command was run in.
+    send("Hello world!")
 
-    return "Hello world!" // Returning a string will send that string as a message to the channel the command was run in. Returning nothing will not send anything.
+    // Returning a string will send it as a (real) message to the channel the command was run in.
+    // Returning nothing will not send anything.
+    return "Hello world!"
   }
 })
 
@@ -361,8 +375,8 @@ Cumcord plugins can export a React component to be used as a settings panel.
 
 ```jsx
 export default {
-  onLoad(),
-  onUnload(),
+  onLoad(){},
+  onUnload(){},
   settings: () => (
     <div>
       <Switch />
