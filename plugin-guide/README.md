@@ -4,7 +4,7 @@ Cumcord plugins are in their most basic form, a JavaScript file that tells Cumco
 This guide will explain technical details of what is involved in plugin creation.
 
 ## Getting Started
-To get started, you'll need `sperm`, Cumcord's plugin build tool.  
+To get started, you'll need `sperm`, Cumcord's plugin build tool.
 `sperm` can be installed from [npm](https://www.npmjs.com/package/sperm '50%').
 
 Creating a new plugin is as simple as making a new directory and running `sperm init` to initialize your plugin.
@@ -14,41 +14,53 @@ Creating a new plugin is as simple as making a new directory and running `sperm 
 ## Creating a Plugin
 `sperm` should've asked you for a main file path, so if you haven't already, create a JS (or JSX) file at the path you put in.
 
-Let's start with an example plugin:
+Here's an empty example of possible plugin exports:
 ```js
-export default (data) => {
-  return {
-    // This onLoad function will be called when your plugin loads, as the name implies.
+// functional style
+export default (data) => ({
     onLoad() {},
-    // This onUnload function will be called when your plugin unloads, as the name *also* implies.
-    onUnload() {}
-  }
+    onUnload() {},
+})
+```
+```js
+// object style
+export default {
+	onLoad() {},
+	onUnload() {}
 }
 ```
+```js
+// export style
+export function onLoad() {}
+export function onUnload() {}
+```
 
-Plugins are functions that take in a `data` argument and return an object containing `onLoad` and `onUnload` functions.
+Plugins consist of an `onLoad` and an `onUnload` function.
+The `onLoad` function is optional, as you can just load your plugin at the top level.
 
-Cumcord will manage your plugin by calling your `onLoad` and `onUnload` functions.
+You may either export an object with these on, export them separately, or export a function returning them.
+If a function, it will be passed `cumcord.pluginData`.
 
-The `data` argument contains the following properties:
-- `persist`: A [Nest](https://github.com/Kyza/nests) that persists your plugin's data
-- `id`: The plugin's ID (The URL it loaded from)
-
+You can import plugin-specific APIs from `cumcord.pluginData` / `@cumcord/pluginData`.
+This includes:
+- `persist`: a [nest](https://github.com/kyza/nests/tree/v2) to be used for storing data
+- `id`: The current id of the plugin. Deprecated and kept for back-compat.
+- `manifest`: Your plugin manifest. 
+- `showSettings()`: opens your own settings modal (see *Plugin settings* below)
 
 ## Using persistent data
 Cumcord uses [Nests](https://github.com/Kyza/nests) to provide your plugin with a `persist` Nest that persists data between sessions.
 The simplest way of using persistent data is to use the `persist.store` properties of the `data` argument.
 
 ```js
-export default (data) => {
-  return {
+import data from "@cumcord/pluginData";
+export default {
     onLoad() {
       const store = data.persist.store;
       // Refer to data.persist.store to store data persistently
       store.my.data.goes.here = "This data will persist between reloads!";
     },
     onUnload() {}
-  }
 }
 ```
 
@@ -56,11 +68,14 @@ export default (data) => {
 
 The maximum size of your persistent data is the size of the user's disk.
 
-## Building a Plugin
-Plugins need to be built into single-file bundles before they can be used. `sperm build` will automatically do this for you and create a `dist/` directory with the built plugin. Do not edit the built plugin, as it will be overwritten. Instead, make changes to the plugin's source files and run `sperm build` again.
+## Building, testing, and publishing a Plugin
+Plugins need to be built into single-file bundles before they can be used.
+`sperm build` will automatically do this for you and create a `dist/` directory with the built plugin.
+Do not edit the built plugin, as it will be overwritten.
+Instead, make changes to the plugin's source files and run `sperm build` again.
 
-## Testing a Plugin locally
-Testing a plugin locally can be done with `sperm dev` on Discord desktop. This will connect to Cumcord's development websocket and reload your plugin when you make changes.
+Testing a plugin locally can be done with `sperm dev` on Discord desktop.
+This will connect to Cumcord's development websocket and reload your plugin when you make changes.
 
 Please note that you must enable developer mode with `cumcord.dev.toggleDevMode()` before you can use `sperm dev`.
 
@@ -68,17 +83,36 @@ If you want to access your plugin's settings modal while developing, you can use
 
 You can access your plugin's persist nest from `cumcord.dev.storage`.
 
-`sperm dev` does not automatically rebuild your plugin on disk, so you'll need to run `sperm build` again once you're done testing.
+`sperm dev` does not automatically rebuild your plugin `dist/` on disk,
+so you'll need to run `sperm build` again to publish once you're done developing.
 
-## Distributing a Plugin
-Distributing plugins is as simple as statically hosting your plugin's `dist/` directory and publishing a link to it. Updating plugins is as simple as building a new version and hosting the new `dist/` directory at the same URL.
+Distributing plugins is as simple as statically hosting your plugin's `dist/` directory and publishing a link to it.
+Updating plugins is as simple as building a new version and hosting the new `dist/` directory at the same URL.
 
 Static hosting platforms I recommend:
 - GitHub Pages
 - Netlify
 - Vercel (The site this guide is hosted on!)
 
-If you'd like to get your plugin on the [Cumdump](https://dump.cumcord.com) you can join the Cumcord Discord and ask a Cumdump manager to put it there.
+If you'd like to get your plugin on the [Cumdump](https://dump.cumcord.com) you can join the Cumcord Discord,
+and ask a Cumdump manager to put it there.
+
+## Plugin settings
+Cumcord plugins can export a React component to be used as a settings panel.
+
+```jsx
+export default {
+  onLoad(){},
+  onUnload(){},
+  settings: () => (
+    <div>
+      <Switch />
+      <Input />
+      <Button />
+    </div>
+  ),
+};
+```
 
 ## Importing Cumcord APIs
 Cumcord plugins can import Cumcord APIs through the `import` keyword with the alias `@cumcord`.
@@ -105,18 +139,12 @@ findByProps === cumcord.modules.webpack.findByProps;
 patcher === cumcord.patcher;
 ```
 
-The only exception to this is plugin-specific APIs:
+The only exception to this is plugin-specific APIs (see *Creating a plugin*):
 ```js
 import pluginData from "@cumcord/pluginData";
 cumcord.pluginData === pluginData;
 window.cumcord.pluginData === undefined;
 ```
-
-You can import plugin-specific APIs from `cumcord.pluginData`.
-This includes:
- - `persist`: a [nest](https://github.com/kyza/nests/tree/v2) to be used for storing data
- - `id`: The current id of the plugin. Deprecated and kept for back-compat.
- - `manifest`: Your plugin manifest.
 
 Imports like this are heavily preferred over accessing the cumcord global.
 
@@ -130,8 +158,12 @@ import fileContent from "./file.txt:static";
 ## Patching
 Cumcord provides an API for patching things at `cumcord.patcher`.
 
+All of the patcher functions are powerful and will likely be used frequently in your plugins.
+
 ### cumcord.patcher.injectCSS <!-- {docsify-ignore} -->
-`cumcord.patcher.injectCSS` injects CSS styles to the DOM and returns a function for modifying them. Calling this function with a string will replace the current CSS styles with the new styles, and calling it with `null` will remove the current styles.
+`cumcord.patcher.injectCSS` injects CSS styles to the DOM and returns a function for modifying them.
+Calling this function with a string will replace the current CSS styles with the new styles,
+and calling it with nothing will remove the current styles.
 
 ```js
 // Add styles
@@ -181,7 +213,7 @@ const unpatch = cumcord.patcher.before(
   window,
   // patch function. if returns Array, that becomes the new args to the function.
   // if returns anything else, the original args are used.
-  (args) => console.log(args[0])
+  (args) => [args[0], `${args[0]} ${args[1]}`]
 );
 
 /*
@@ -233,23 +265,28 @@ console.log(exampleFunction());
 Returning anything in your callback function will override the return value of the patched function.
 
 ### cumcord.patcher.instead <!-- {docsify-ignore} -->
-`cumcord.patcher.instead` replaces a function with a new function and passes an array with the patched function's arguments to a callback function as well as the original function itself.
+`cumcord.patcher.instead` replaces a function with a new function, passing through args and overriding the return value.
 
 ```js
-let patched;
-
 function exampleFunction() { console.log("hello"); };
 
 // Currently, this function logs "hello" to the console. Let's patch it so it logs "goodbye" instead.
 exampleFunction();
 
-patched = cumcord.patcher.instead("exampleFunction", window, (arguments, originalFunction) => { console.log("goodbye") });
+const unpatch = cumcord.patcher.instead(
+  // name of func to patch
+  "exampleFunction",
+  // object containing func
+  window,
+  // patch func. Entirely replaces original function, but has access to call it etc.
+  (args, originalFunc) => console.log("goodbye")
+);
 
 // This now logs "goodbye".
 exampleFunction();
 
 // This removes the patch.
-patched();
+unpatch();
 
 // This now logs "hello" again.
 exampleFunction();
@@ -261,24 +298,22 @@ exampleFunction();
 This provides an easy method to patch a component as soon as it is available:
 ```js
 // traditional way
-const MessageContextMenu = cumcord.webpack.findByDisplayName("MessageContextMenu", false)
-const unpatch = cumcord.patcher.after("default", MessageContextMenu, () => {});
+const MessageContextMenu = cumcord.webpack.findByDisplayName("MessageContextMenu", false);
+const unpatch1 = cumcord.patcher.after("default", MessageContextMenu, () => {});
 // ERROR!!!! - MessageContextMenu may be `undefined`
 
 // new way
-const unpatch = cumcord.patcher.findAndPatch(
+const unpatch2 = cumcord.patcher.findAndPatch(
   () => cumcord.webpack.findByDisplayName("MessageContextMenu", false),
-  (MessageContextMenu) => cumcord.patcher.after("default", MessageContextMenu, () => {});
+  (MessageContextMenu) => cumcord.patcher.after("default", MessageContextMenu, () => {})
 ); // works!
 ```
 
 
-All of these patcher functions are powerful and will likely be used frequently in your plugins.
-
 ## UI Elements
 Cumcord provides multiple APIs for managing UI elements, but under the hood they all use React.
 
-Cumcord plugins can use .jsx files to create React components.
+Cumcord plugins can use `.jsx` files to create React components.
 
 JSX files get the `React` object in them automatically for free,
 and sperm will replace imports from `"react"` to make npm packages work,
@@ -368,23 +403,6 @@ const removeCommand = cumcord.commands.addCommand({
 })
 
 removeCommand() // This removes the command.
-```
-
-## Plugin settings
-Cumcord plugins can export a React component to be used as a settings panel.
-
-```jsx
-export default {
-  onLoad(){},
-  onUnload(){},
-  settings: () => (
-    <div>
-      <Switch />
-      <Input />
-      <Button />
-    </div>
-  ),
-};
 ```
 
 ## Finding internal Discord functions
